@@ -161,6 +161,7 @@ MUI_UnitFrames\MUI_ComboBar.lua
 MUI_UnitFrames\MUI_UnitFrameComboBar.lua
 MUI_UnitFrames\MUI_UnitFrames.lua
 MUI_CastBar\MUI_CastBar.lua
+MUI_SwingBar\MUI_SwingBar.lua
 MUI_Nameplates\MUI_Nameplates.lua
 MUI_Chat\MUI_ChatFrame.lua
 MUI_Chat\MUI_Chat.lua
