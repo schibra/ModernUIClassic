@@ -599,9 +599,6 @@ class "MapQuestDescriptionTab" : extends "Frame" {
         local maxScroll = math.max(0, childH - viewportH)
         self.slider:SetMinMax(0, maxScroll)
         self.slider:SetContentSize(viewportH, childH)
-        if self.slider:GetValue() > maxScroll then
-            self.slider:SetValue(maxScroll)
-        end
     end;
 
     -- Populate the panel for a given quest. Reads description /

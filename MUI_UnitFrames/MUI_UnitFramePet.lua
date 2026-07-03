@@ -132,10 +132,7 @@ class "UnitFramePet" {
             self.combatGlowTex:SetAlpha(1)
             self.combatPulseTime = 0
         elseif petInCombat then
-            self.combatPulseTime = self.combatPulseTime + elapsed
-            if self.combatPulseTime > self.combatPulseDuration then
-                self.combatPulseTime = self.combatPulseTime - self.combatPulseDuration
-            end
+            self.combatPulseTime = (self.combatPulseTime + elapsed) % self.combatPulseDuration
             local progress = self.combatPulseTime / self.combatPulseDuration
             self.combatGlowTex:SetAlpha(math.sin(progress * 3.14159))
         else

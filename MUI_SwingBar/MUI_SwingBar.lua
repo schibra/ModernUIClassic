@@ -24,6 +24,11 @@ local SWING_DEBOUNCE = 0.1
 -- "On next swing" abilities consume the pending auto-attack swing and land it
 -- as SPELL_DAMAGE/SPELL_MISSED instead of SWING_DAMAGE/SWING_MISSED, but they
 -- still restart the melee swing timer just like a normal white attack.
+--
+-- Extra-attack procs (Windfury Totem/Weapon, Sword Specialization, Hand of
+-- Justice) are the opposite case: they land as an ordinary SWING_DAMAGE/
+-- SWING_MISSED bonus swing, always with the mainhand weapon, and they *also*
+-- reset the melee swing timer rather than being "free" hits on the side.
 local ON_SWING_ABILITIES = {
     ["Heroic Strike"]  = true,
     ["Cleave"]         = true,
@@ -146,10 +151,13 @@ object "ModuleSwingBar" : extends "Module" {
         if sourceGUID ~= UnitGUID("player") then return end
 
         if event == "SWING_DAMAGE" or event == "SWING_MISSED" then
-            -- Extra-attack procs (Windfury Totem, Hand of Justice, Sword Specialization)
-            -- grant bonus instant swings that don't restart the real attack timer.
             if self._pendingExtraAttacks > 0 then
                 self._pendingExtraAttacks = self._pendingExtraAttacks - 1
+                -- Always mainhand, and resets the timer just like a normal swing —
+                -- skip the dual-wield guesser so it can't misclassify this as offhand.
+                local mainSpeed = UnitAttackSpeed("player")
+                mainSpeed = (mainSpeed and mainSpeed > 0) and mainSpeed or 2.0
+                self:_OnSwing(self._melee, mainSpeed)
             else
                 self:_OnMeleeSwing()
             end

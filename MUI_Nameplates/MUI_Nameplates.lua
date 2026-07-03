@@ -91,7 +91,7 @@ object "ModuleNameplates" : extends "Module" {
         end
 		
 		-- NPC tapped by others - grey
-		if UnitIsTapDenied(unit) then
+		if UnitIsTapDenied and UnitIsTapDenied(unit) then
 			return 0.8, 0.8, 0.8
 		end
 		
