@@ -39,20 +39,15 @@ class "UnitFramePlayer" {
         Texture(PlayerStatusTexture):SetTexture("")
 
         self.frame = UnitFrameEditable(PlayerFrame, "Player")
-        self.frame:ClearAllPoints()
-        self.frame:SetSize(171, 58)
-        self.frame:SetPoint("BOTTOMRIGHT", MUI_ModuleActionBars.bars.MAIN1, "TOPLEFT", -38, 162)
         self.frame:EditModeSetDefaultPosition(function(f)
             f:ClearAllPoints()
             f:SetPoint("BOTTOMRIGHT", MUI_ModuleActionBars.bars.MAIN1, "TOPLEFT", -38, 162)
         end)
 
         self._portrait = Texture(PlayerPortrait)
-        self._portrait:SetSize(56, 54)
-        self._portrait:ClearAllPoints()
-        self._portrait:AlignTop(self.frame, 1)
-        self._portrait:AlignLeft(self.frame, 1)
         self._portrait:SetDrawLayer("BACKGROUND")
+
+        self:Reanchor()
 
         self._frameTex = Texture(self.frame)
         self._frameTex:SetTextureRegion(TEX .. "player-frame", 512, 128, 63, 0, 384, 128)
@@ -124,6 +119,19 @@ class "UnitFramePlayer" {
         self:_BuildOverlays()
         self:_BuildHitTextFrame()
         self:UpdateTexts()
+    end;
+
+    -- Re-applies PlayerFrame position and portrait anchor. Called once at
+    -- init and again on PLAYER_ENTERING_WORLD because Blizzard's native UI
+    -- resets PlayerFrame to its default position after every loading screen.
+    Reanchor = function(self)
+        self.frame:ClearAllPoints()
+        self.frame:SetSize(171, 58)
+        self.frame:SetPoint("BOTTOMRIGHT", MUI_ModuleActionBars.bars.MAIN1, "TOPLEFT", -38, 162)
+        self._portrait:SetSize(56, 54)
+        self._portrait:ClearAllPoints()
+        self._portrait:AlignTop(self.frame, 1)
+        self._portrait:AlignLeft(self.frame, 1)
     end;
 
     _BuildOverlays = function(self)
