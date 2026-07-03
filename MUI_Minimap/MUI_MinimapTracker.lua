@@ -180,6 +180,7 @@ object "MinimapTracker" : extends "Module" {
         -- Last top-level areaId we built pins for; re-used to decide whether
         -- a zone change actually needs a rebuild.
         self.currentAreaId = nil
+        self._pinPool = {}
     end;
 
     OnEnable = function(self)
@@ -268,7 +269,7 @@ object "MinimapTracker" : extends "Module" {
                 if spawns then
                     for i, coord in ipairs(spawns) do
                         local pinName = "MUI_Tracker_" .. key .. "_" .. id .. "_" .. i
-                        local pin = MinimapPin(pinName, 12)
+                        local pin = self:_AcquirePin(pinName, 12)
                         pin:SetIconType(spec.icon)
                         pin:SetWorldPosition(uiMapId, coord[1] / 100, coord[2] / 100)
                         -- Click-through: hover detection is purely geometric
@@ -329,11 +330,13 @@ object "MinimapTracker" : extends "Module" {
     _DestroyFilter = function(self, key)
         local bucket = self.pins[key]
         if not bucket then return end
+        local pool = self._pinPool
         for _, e in ipairs(bucket) do
             if e.tooltipId then
                 MUI_MinimapTooltip:Unregister(e.tooltipId)
             end
             e.pin:Destroy()
+            pool[#pool + 1] = e.pin
         end
         self.pins[key] = nil
     end;
@@ -342,5 +345,14 @@ object "MinimapTracker" : extends "Module" {
         for key in pairs(self.pins) do
             self:_DestroyFilter(key)
         end
+    end;
+
+    _AcquirePin = function(self, name, size)
+        local pin = table.remove(self._pinPool)
+        if pin then
+            pin:Reset(size)
+            return pin
+        end
+        return MinimapPin(name, size)
     end;
 }
