@@ -536,6 +536,10 @@ class "QuestTrackerQuest" : extends "Frame" {
         self._titleClick:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT",   0, -TITLE_H - 6)
         self._titleClick.OnClick = function()
             if not self.questId then return end
+            if IsShiftKeyDown() then
+                MUI_QuestHelper:SetTracked(self.questId, false)
+                return
+            end
             -- Open the map out of combat. ToggleWorldMap is protected in
             -- combat, so this is silently skipped there — the navigation
             -- below still runs and will be reflected when the player next
