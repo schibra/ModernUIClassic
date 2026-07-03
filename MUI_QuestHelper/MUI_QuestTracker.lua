@@ -1204,14 +1204,80 @@ class "QuestTracker" : extends {"Frame", "Editable"} {
                 tracked[#tracked + 1] = entry
             end
         end
-        -- Quests with a track-order (assigned the moment they became
-        -- tracked — either via QUEST_ACCEPTED isNew or via SetTracked
-        -- toggling untracked → tracked) sort first, newest at the top.
-        -- Pre-existing tracked quests from /reload have no track-order
-        -- and fall to the bottom in logIndex order, preserving the
-        -- prior behaviour.
+
+        -- Player world position, evaluated once per rebuild.
+        -- Used to compute per-quest proximity so nearby quests sort first.
+        local playerX, playerY, playerCont
+        local uiMapId = C_Map.GetBestMapForUnit("player")
+        if uiMapId then
+            local pos = C_Map.GetPlayerMapPosition(uiMapId, "player")
+            if pos then
+                playerX, playerY, playerCont = MUI_MapMath:MapToWorld(uiMapId, pos.x, pos.y)
+            end
+        end
+
+        -- Returns (tier, distanceSq) for proximity-first ordering:
+        --   0  complete quest whose turn-in is on the player's continent
+        --   1  in-progress quest with objectives on the player's continent
+        --   2  complete quest, turn-in on a different continent or unknown
+        --   3  in-progress quest, objectives elsewhere / no geo data
+        local function _proximityTier(entry)
+            local cluster = MUI_QuestHelper:GetQuestClusters(entry.questId)
+            if not cluster then return 3, 0 end
+
+            if entry.isComplete then
+                local fPoints = cluster:GetFinisherPoints()
+                local fCont   = cluster:GetFinisherContinent()
+                if playerCont and fCont == playerCont and #fPoints > 0 then
+                    local minDist = math.huge
+                    if playerX then
+                        for _, pt in ipairs(fPoints) do
+                            local dx = pt[1] - playerX
+                            local dy = pt[2] - playerY
+                            local d  = dx * dx + dy * dy
+                            if d < minDist then minDist = d end
+                        end
+                    end
+                    return 0, minDist == math.huge and 0 or minDist
+                end
+                return 2, 0
+            end
+
+            -- In-progress: find nearest unfinished objective cluster.
+            local cont = cluster:GetContinent()
+            if playerCont and cont == playerCont then
+                local minDist = math.huge
+                if playerX then
+                    for _, c in ipairs(cluster:GetClusters()) do
+                        if c._continent == playerCont then
+                            local dx = c.centroid[1] - playerX
+                            local dy = c.centroid[2] - playerY
+                            local d  = dx * dx + dy * dy
+                            if d < minDist then minDist = d end
+                        end
+                    end
+                    for _, pt in ipairs(cluster:GetPoints()) do
+                        local dx = pt[1] - playerX
+                        local dy = pt[2] - playerY
+                        local d  = dx * dx + dy * dy
+                        if d < minDist then minDist = d end
+                    end
+                end
+                return 1, minDist == math.huge and 0 or minDist
+            end
+
+            return 3, 0
+        end
+
+        -- Primary: proximity tier then distance. Secondary: track-order
+        -- (newest first) then logIndex, preserving the prior behaviour
+        -- within each tier.
         local order = self._trackOrder
         table.sort(tracked, function(a, b)
+            local ta, da = _proximityTier(a)
+            local tb, db = _proximityTier(b)
+            if ta ~= tb then return ta < tb end
+            if da ~= db then return da < db end
             local oa, ob = order[a.questId], order[b.questId]
             if oa and ob then return oa > ob end
             if oa then return true end
