@@ -130,6 +130,7 @@ class "MinimapQuestPinManager" : extends "Frame" {
         -- availablePins[key] = { pin, tooltipId, questIds = {qid, ...} }
         self.availablePins = {}
         self.currentAreaId = nil
+        self._pinPool      = {}
 
         -- Visibility gates persisted via MUI_DB.settings.questHelper. When
         -- false, creation methods short-circuit; lifecycle events still fire
@@ -377,7 +378,7 @@ class "MinimapQuestPinManager" : extends "Frame" {
     _CreatePinEntry = function(self, spec)
         local pinName = string.format("MUI_QuestPin_%d_%d_%d_%d",
                 spec.questId, spec.objectiveIdx, spec.targetId, spec.spawnIdx)
-        local pin = MinimapPin(pinName, 12)
+        local pin = self:_AcquirePin(pinName, 12)
         pin:SetIconType(spec.iconType)
         pin:SetWorldPosition(spec.uiMapId, spec.normX, spec.normY)
         -- EnableMouse(false) keeps the pin from capturing mouse focus —
@@ -427,9 +428,11 @@ class "MinimapQuestPinManager" : extends "Frame" {
     _DestroyPinsForQuest = function(self, questId, predicate)
         local bucket = self.pins[questId]
         if not bucket then return end
+        local pool = self._pinPool
         local function _killEntry(e)
             if e.tooltipId then MUI_MinimapTooltip:Unregister(e.tooltipId) end
             e.pin:Destroy()
+            pool[#pool + 1] = e.pin
         end
         if not predicate then
             for _, e in ipairs(bucket) do _killEntry(e) end
@@ -735,7 +738,7 @@ class "MinimapQuestPinManager" : extends "Frame" {
     _SpawnAvailablePin = function(self, key, spec, questIds, iconType)
         local sanitized = key:gsub("[^%w]", "_")
         local pinName = "MUI_QuestAvailablePin_" .. sanitized
-        local pin = MinimapPin(pinName, 12)
+        local pin = self:_AcquirePin(pinName, 12)
         pin:SetIconType(iconType or "QuestAvailable")
         pin:SetWorldPosition(spec.uiMapId, spec.normX, spec.normY)
         pin:EnableMouse(false)
@@ -777,12 +780,23 @@ class "MinimapQuestPinManager" : extends "Frame" {
     end;
 
     _DestroyAllAvailablePins = function(self)
+        local pool = self._pinPool
         for _, entry in pairs(self.availablePins) do
             if entry.tooltipId then
                 MUI_MinimapTooltip:Unregister(entry.tooltipId)
             end
             entry.pin:Destroy()
+            pool[#pool + 1] = entry.pin
         end
         self.availablePins = {}
+    end;
+
+    _AcquirePin = function(self, name, size)
+        local pin = table.remove(self._pinPool)
+        if pin then
+            pin:Reset(size)
+            return pin
+        end
+        return MinimapPin(name, size)
     end;
 }
