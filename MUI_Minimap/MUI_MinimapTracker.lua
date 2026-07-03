@@ -162,12 +162,8 @@ local FILTERS = {
         match  = function(e, id) return _PLAYER_CLASS_TRAINER_SET[id] == true end,
     },
     LowLevelQuests = {
-        -- TODO: requires iterating quests, not NPCs/objects. Deferred —
-        -- placeholder that produces zero pins for now so the filter toggle
-        -- doesn't error out.
-        source = "none",
+        source = "trivial",
         icon   = "QuestAvailable",
-        match  = function() return false end,
     },
 }
 
@@ -203,6 +199,19 @@ object "MinimapTracker" : extends "Module" {
         driver:RegisterEventHandler("PLAYER_ENTERING_WORLD", function()
             self:_MaybeRebuildForZone()
         end)
+
+        -- Rebuild the trivial-quest layer whenever the availability set
+        -- changes (level-up, quest accept/turn-in, or the low-level toggle).
+        if MUI_QuestHelper and MUI_QuestHelper.availability then
+            MUI_QuestHelper.availability:RegisterChangeListener(function()
+                local enabled = MUI_DB.settings.questHelper.showLowLevelAvailableQuests
+                if enabled then
+                    self:_BuildFilter("LowLevelQuests")
+                else
+                    self:_DestroyFilter("LowLevelQuests")
+                end
+            end)
+        end
     end;
 
     -- Called externally (by the tracker menu) whenever the user toggles a
@@ -219,7 +228,8 @@ object "MinimapTracker" : extends "Module" {
     -- Full rebuild: destroy all pins, then re-add for each currently-enabled
     -- filter. Called on zone change and at OnEnable. FlightMaster is built
     -- unconditionally — it has no menu checkbox, the player always needs
-    -- to see where to fly from.
+    -- to see where to fly from. LowLevelQuests lives under questHelper
+    -- settings (shared with the world-map toggle), not minimapTracker.filters.
     Rebuild = function(self)
         self:_DestroyAll()
         local filters = MUI_DB.settings.minimapTracker.filters or {}
@@ -228,6 +238,9 @@ object "MinimapTracker" : extends "Module" {
         end
         if not filters.FlightMaster then
             self:_BuildFilter("FlightMaster")
+        end
+        if MUI_DB.settings.questHelper.showLowLevelAvailableQuests then
+            self:_BuildFilter("LowLevelQuests")
         end
     end;
 
@@ -259,6 +272,36 @@ object "MinimapTracker" : extends "Module" {
         self:_DestroyFilter(key)
         local bucket = {}
         self.pins[key] = bucket
+
+        if spec.source == "trivial" then
+            if not (MUI_QuestHelper and MUI_QuestHelper.availability) then return end
+            local starters = MUI_QuestHelper.availability:GetStartersInArea(areaId)
+            for i, s in ipairs(starters) do
+                if s.isTrivial then
+                    local pinName = "MUI_Tracker_" .. key .. "_" .. s.questId .. "_" .. i
+                    local pin = self:_AcquirePin(pinName, 12)
+                    pin:SetIconType(spec.icon)
+                    pin:SetWorldPosition(s.uiMapId, s.normX, s.normY)
+                    pin:EnableMouse(false)
+                    local qName = s.name
+                    MUI_MinimapTooltip:Register(pinName, {
+                        isHovered = function()
+                            return MouseIsOver(Minimap)
+                               and pin:IsShown()
+                               and pin:GetAlpha() > 0.05
+                               and pin:IsMouseOver()
+                        end,
+                        build = function()
+                            if not MUI_Tooltip:HasLine(qName) then
+                                MUI_Tooltip:AddTitle(qName)
+                            end
+                        end,
+                    })
+                    bucket[#bucket + 1] = { pin = pin, tooltipId = pinName }
+                end
+            end
+            return
+        end
 
         local dbTable = (spec.source == "npcs") and MUI_NpcDB:GetAll() or MUI_ObjectDB:GetAll()
         if not dbTable then return end

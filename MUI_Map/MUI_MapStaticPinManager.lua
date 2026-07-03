@@ -495,10 +495,6 @@ class "MapStaticPinManager" : extends "Frame" {
         local playerLetter = (pf == "Alliance" and "A")
                           or (pf == "Horde"    and "H")
                           or "N"
-        -- DEBUG: show all factions while tweaking endpoint coords. Restore
-        -- to `(ep.faction == "N" or ep.faction == playerLetter)` before
-        -- shipping.
-        local SHOW_ALL_FACTIONS = false
 
         for _, ep in ipairs(endpoints) do
             -- Cache world coords for the focus adapter regardless of
@@ -512,7 +508,7 @@ class "MapStaticPinManager" : extends "Frame" {
                 }
             end
 
-            if SHOW_ALL_FACTIONS or ep.faction == "N" or ep.faction == playerLetter then
+            if ep.faction == "N" or ep.faction == playerLetter then
                 local icon = TRANSPORT_FACTION_ICON[ep.faction]
                 if icon then
                     local key = ep.key

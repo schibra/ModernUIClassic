@@ -8,7 +8,7 @@
 --   * bg     — skillbar-bg slice of professions.tga (fills the frame).
 --   * fill   — per-profession flipbook atlas; width = barWidth*ratio,
 --              TexCoord = (current frame UVs, cropped right by ratio).
---   * flare  — red placeholder, anchored to fill's right (leading) edge.
+--   * flare  — additive bloom anchored to fill's right (leading) edge.
 --              Hidden at 100%.
 --   * border — skillbar-frame slice (OVERLAY).
 -- The 60-frame "pulse" restarts on profession switch or skill change.
@@ -54,7 +54,6 @@ class "ProfessionsRankBar" : extends "Frame" {
         -- Background (skillbar-bg slice of professions.tga).
         local bg = Texture(self, nil, "ARTWORK")
         bg:SetDrawLayer("ARTWORK", 1)
-        bg:SetColorTexture(1, 0, 0, 1)
         bg:SetTextureRegion(PROFESSIONS_ATLAS, 2048, 1024, 610, 768, 452, 26)
         bg:FillParentPadding(-2, 0, -3, 0)
 
@@ -68,7 +67,7 @@ class "ProfessionsRankBar" : extends "Frame" {
         self._rankFill:AlignParentBottom(3)
         self._rankFill:SetWidth(0)
 
-        -- Flare — red placeholder; anchored to the fill's right edge so
+        -- Flare — additive bloom; anchored to the fill's right edge so
         -- it sits at the leading edge of the progress.
         self._rankFlare = Texture(self, nil, "ARTWORK")
         self._rankFlare:SetDrawLayer("ARTWORK", 3)
