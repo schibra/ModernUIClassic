@@ -341,4 +341,38 @@ class "MapPin" : extends "Frame" {
         self:Hide()
         self:ClearAllPoints()
     end;
+
+    -- Prepare a pooled pin for reuse. Resets all per-use state so the
+    -- caller can configure it fresh without creating new child textures.
+    Reset = function(self, size)
+        size = size or 32
+        self:SetSize(size, size)
+        MUI_MapPinScaleTracker:Register(self)
+
+        self._focused        = false
+        self._pressed        = false
+        self._onClickFn      = nil
+        self._isOnFn         = nil
+        self._mouseDownX     = nil
+        self._mouseDownY     = nil
+        self._focusKind      = nil
+        self._focusKey       = nil
+        self._tooltipHooked  = false
+        self._tooltipBuilder = nil
+
+        self.focusedBadge:Hide()
+        self.focusedHalo:Hide()
+        self.indicator:Hide()
+
+        self.icon:SetVertexColor(1, 1, 1, 1)
+        self.icon:SetDesaturated(false)
+
+        self:SetScript("OnMouseDown", nil)
+        self:SetScript("OnMouseUp",   nil)
+        self:SetScript("OnEnter",     nil)
+        self:SetScript("OnLeave",     nil)
+
+        self:_RefreshIconAnchor()
+        self:Hide()
+    end;
 }

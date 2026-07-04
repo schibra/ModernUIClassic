@@ -1,31 +1,16 @@
 -- MapCornerButton: prototype of retail's WorldMap top-right corner
 -- buttons (Map Filters + Map Pin / waypoint).
 --
--- Shared chrome — all four exist on Era and match retail visually:
+-- Shared chrome:
 --   * Round disc       Interface\Minimap\UI-Minimap-Background    (25x25)
---   * Border ring      Interface\Minimap\MiniMap-TrackingBorder   (54x54)
+--   * Border ring      skin/worldmap/button-border.tga
 --   * Hover highlight  Interface\Minimap\UI-Minimap-ZoomButton-Highlight (ADD)
---   * Active glow      Interface\Minimap\UI-Minimap-ZoomButton-Toggle    (ADD, 37x37)
---
--- Retail uses two atlas regions for the central glyphs that don't ship
--- on Era:
---   * Map-Filter-Button       — funnel/filter glyph for the filter btn
---   * Waypoint-MapPin-Untracked — pin glyph for the pin btn
--- Until the textures are imported, callers can pass any Blizzard icon
--- via SetIconPath as a placeholder; PLACEHOLDER_FILTER_ICON /
--- PLACEHOLDER_PIN_ICON below are reasonable temporary stand-ins.
+--   * Active glow      skin/worldmap/button-toggle.tga             (ADD)
 --
 -- Per-button extras:
 --   * Map Pin button uses SetActive(true/false) to flash the toggle
 --     glow whenever a waypoint is placed (retail behaviour).
---   * Filter button doesn't toggle the glow (its retail extras are a
---     filter-counter banner under the chrome — also retail-only atlas,
---     left as TODO).
-
--- Visible placeholders. Caller swaps in retail atlas regions when those
--- land via :SetIconPath(path) or a future :SetIconAtlas helper.
-PLACEHOLDER_MAP_FILTER_ICON = "Interface\\Icons\\Trade_Engineering"
-PLACEHOLDER_MAP_PIN_ICON    = "Interface\\Icons\\INV_Misc_Map_01"
+--   * Filter button shows a funnel glyph from skin/worldmap/button-filter.tga.
 
 class "MapCornerButton" : extends "Button" {
     __init = function(self, parent, name)

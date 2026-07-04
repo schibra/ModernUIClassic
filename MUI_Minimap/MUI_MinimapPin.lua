@@ -207,6 +207,14 @@ class "MinimapPin" : extends "Frame" {
         self:ClearAllPoints()
     end;
 
+    Reset = function(self, size)
+        size = size or 12
+        self:SetSize(size, size)
+        MUI_MinimapPinTicker:Register(self)
+        self.icon:SetVertexColor(1, 1, 1, 1)
+        self:Hide()
+    end;
+
     -- ---- per-tick projection --------------------------------------------
 
     -- Called by the shared ticker ~10×/s.  Computes the player-to-pin yard

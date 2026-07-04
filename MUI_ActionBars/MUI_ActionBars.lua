@@ -477,7 +477,7 @@ object "ModuleActionBars" : extends "Module" {
         end)
         self.slotChangeWatcher:RegisterEventHandler("PLAYER_REGEN_ENABLED", function()
             if self._pendingBarsVisibility then
-                self:UpdateBarsVisibility()
+                self:_UpdateBarsVisibility()
             end
             self:_UpdateSlotsVisibility()
         end)

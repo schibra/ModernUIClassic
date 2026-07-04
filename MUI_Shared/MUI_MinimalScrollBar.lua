@@ -193,8 +193,13 @@ class "MinimalScrollBar" : extends "Frame" {
     SetMinMax = function(self, min, max)
         self._minVal = min
         self._maxVal = max
-        if self._value > max then self._value = max end
-        if self._value < min then self._value = min end
+        local clamped = math.max(min, math.min(max, self._value))
+        if clamped ~= self._value then
+            self._value = clamped
+            if self.OnScroll then
+                self:OnScroll(self._value)
+            end
+        end
         self:_UpdateThumbPosition()
     end;
 

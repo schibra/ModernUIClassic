@@ -159,6 +159,7 @@ class "MapStaticPinManager" : extends "Frame" {
         self.transportPins      = {}
         self.dungeonPins        = {}
         self.availableQuestPins = {}
+        self._pinPool           = {}
         -- Per-kind world-coord caches keyed by stable identifier. Populated
         -- as we build pins for each zone the user navigates to. Persist
         -- across map switches so the focus arrow can keep pointing at a
@@ -439,7 +440,7 @@ class "MapStaticPinManager" : extends "Frame" {
                     and not self:_PointInsideAnyHub(uiMapId, node.position.x, node.position.y) then
                 local nodeID = node.nodeID
                 local pinName = "MUI_MapStaticPin_FlightMaster_" .. nodeID
-                local pin = MapPin(pinName, 14)
+                local pin = self:_AcquirePin(pinName, 14)
                 pin._focusKind = "flightmaster"
                 pin._focusKey  = nodeID
                 pin:SetIconType(self:_FlightMasterIcon(node))
@@ -494,10 +495,6 @@ class "MapStaticPinManager" : extends "Frame" {
         local playerLetter = (pf == "Alliance" and "A")
                           or (pf == "Horde"    and "H")
                           or "N"
-        -- DEBUG: show all factions while tweaking endpoint coords. Restore
-        -- to `(ep.faction == "N" or ep.faction == playerLetter)` before
-        -- shipping.
-        local SHOW_ALL_FACTIONS = false
 
         for _, ep in ipairs(endpoints) do
             -- Cache world coords for the focus adapter regardless of
@@ -511,13 +508,13 @@ class "MapStaticPinManager" : extends "Frame" {
                 }
             end
 
-            if SHOW_ALL_FACTIONS or ep.faction == "N" or ep.faction == playerLetter then
+            if ep.faction == "N" or ep.faction == playerLetter then
                 local icon = TRANSPORT_FACTION_ICON[ep.faction]
                 if icon then
                     local key = ep.key
                     local pinName = "MUI_MapStaticPin_Transport_"
                                     .. tostring(uiMapId) .. "_" .. tostring(key)
-                    local pin = MapPin(pinName, 14)
+                    local pin = self:_AcquirePin(pinName, 14)
                     pin._focusKind = "transport"
                     pin._focusKey  = key
                     pin:SetIconType(icon)
@@ -614,7 +611,7 @@ class "MapStaticPinManager" : extends "Frame" {
                 local icon = d.isRaid and "Raid" or "Dungeon"
                 local pinName = "MUI_MapStaticPin_Dungeon_"
                                 .. tostring(uiMapId) .. "_" .. tostring(key)
-                local pin = MapPin(pinName, 16)
+                local pin = self:_AcquirePin(pinName, 16)
                 pin._focusKind = "dungeon"
                 pin._focusKey  = key
                 pin:SetIconType(icon)
@@ -798,7 +795,7 @@ class "MapStaticPinManager" : extends "Frame" {
                         .. focusKey:gsub("[^%w]", "_") .. "_"
                         .. math.floor(s.normX * 1000) .. "_"
                         .. math.floor(s.normY * 1000)
-        local pin = MapPin(pinName, 14)
+        local pin = self:_AcquirePin(pinName, 14)
         pin._focusKind = "questgiver"
         pin._focusKey  = focusKey
         pin:SetIconType(icon)
@@ -870,7 +867,7 @@ class "MapStaticPinManager" : extends "Frame" {
         end
 
         local pinName = "MUI_MapStaticPin_QuestHub_" .. hub.id
-        local pin = MapPin(pinName, 18)
+        local pin = self:_AcquirePin(pinName, 18)
         pin._focusKind = "questhub"
         pin._focusKey  = hub.id
         pin:SetIconType("Hub")
@@ -1082,13 +1079,25 @@ class "MapStaticPinManager" : extends "Frame" {
     end;
 
     _DestroyAll = function(self)
-        for _, pin in ipairs(self.flightMasterPins)   do pin:Destroy() end
-        self.flightMasterPins = {}
-        for _, pin in ipairs(self.transportPins)      do pin:Destroy() end
-        self.transportPins = {}
-        for _, pin in ipairs(self.availableQuestPins) do pin:Destroy() end
-        self.availableQuestPins = {}
-        for _, pin in ipairs(self.dungeonPins)        do pin:Destroy() end
-        self.dungeonPins = {}
+        local pool = self._pinPool
+        local function recycle(list)
+            for _, pin in ipairs(list) do
+                pin:Destroy()
+                pool[#pool + 1] = pin
+            end
+        end
+        recycle(self.flightMasterPins);   self.flightMasterPins   = {}
+        recycle(self.transportPins);      self.transportPins      = {}
+        recycle(self.availableQuestPins); self.availableQuestPins = {}
+        recycle(self.dungeonPins);        self.dungeonPins        = {}
+    end;
+
+    _AcquirePin = function(self, name, size)
+        local pin = table.remove(self._pinPool)
+        if pin then
+            pin:Reset(size)
+            return pin
+        end
+        return MapPin(name, size)
     end;
 }

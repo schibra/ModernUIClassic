@@ -166,6 +166,7 @@ object "UnitFrames" : extends "Module" {
         self.eventFrame:RegisterEventHandler("UNIT_MAXPOWER",   unitBars)
 
         self.eventFrame:RegisterEventHandler("PLAYER_ENTERING_WORLD", function()
+            self.player:Reanchor()
             self.player:UpdateBars()
             self.combo:Update()
             if UnitExists("target") then self.target:OnTargetChanged() end

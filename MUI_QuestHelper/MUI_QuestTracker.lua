@@ -536,6 +536,10 @@ class "QuestTrackerQuest" : extends "Frame" {
         self._titleClick:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT",   0, -TITLE_H - 6)
         self._titleClick.OnClick = function()
             if not self.questId then return end
+            if IsShiftKeyDown() then
+                MUI_QuestHelper:SetTracked(self.questId, false)
+                return
+            end
             -- Open the map out of combat. ToggleWorldMap is protected in
             -- combat, so this is silently skipped there — the navigation
             -- below still runs and will be reflected when the player next
@@ -857,13 +861,24 @@ class "QuestTrackerCategory" : extends "Frame" {
         self.body:SetPoint("TOPLEFT",  self.header, "BOTTOMLEFT",  0, -HEADER_QUEST_PAD)
         self.body:SetPoint("TOPRIGHT", self.header, "BOTTOMRIGHT", 0, -HEADER_QUEST_PAD)
 
+        -- Shown below the body when quests are clipped due to height cap.
+        self._overflowText = FontString(self, nil, "OVERLAY")
+        self._overflowText:SetFont(MUI.FONT, 9)
+        self._overflowText:SetTextColor(0.6, 0.6, 0.6)
+        self._overflowText:SetJustifyH("LEFT")
+        self._overflowText:SetPoint("TOPLEFT", self.body, "BOTTOMLEFT", 2, -2)
+        self._overflowText:Hide()
+
         self.quests     = {}
         self._collapsed = false
     end;
 
-    SetQuests = function(self, entries, pendingAddAnim)
-        local seen  = {}
-        local bY    = 0
+    -- maxBodyH: optional pixel cap on the body height. Quests that would
+    -- push the body past the cap are hidden; _overflowText shows the count.
+    SetQuests = function(self, entries, pendingAddAnim, maxBodyH)
+        local seen     = {}
+        local bY       = 0
+        local overflow = 0
         for _, row in ipairs(self.quests) do row:Hide() end
 
         for i, entry in ipairs(entries or {}) do
@@ -873,23 +888,46 @@ class "QuestTrackerCategory" : extends "Frame" {
                 self.quests[i] = row
             end
             row:ClearAllPoints()
-			row:AlignParentTop(bY)
-			row:FillWidth()
+            row:AlignParentTop(bY)
+            row:FillWidth()
             row:SetQuest(entry.questId, entry)
+
+            local rowH = row:GetHeight() or TITLE_H
+            -- Clip at the cap, but always show at least the first quest so
+            -- the tracker is never empty when there are tracked quests.
+            if maxBodyH and i > 1 and (bY + rowH) > maxBodyH then
+                row:Hide()
+                overflow = #entries - i + 1
+                -- Consume pending add-anims for hidden quests so they don't
+                -- fire when those quests scroll back into view after a later
+                -- rebuild reduces the visible set.
+                for j = i, #entries do
+                    if pendingAddAnim then
+                        pendingAddAnim[entries[j].questId] = nil
+                    end
+                end
+                break
+            end
+
             row:Show()
-            row:_SyncHover(false, entry.level)   -- initial dim-state
-            -- Quests flagged as just-accepted (via the watcher's isNew
-            -- path) get the shine-sweep on first appearance. Consume the
-            -- entry so a second Rebuild in the same session won't replay.
+            row:_SyncHover(false, entry.level)
             if pendingAddAnim and pendingAddAnim[entry.questId] then
                 row:PlayAddAnim()
                 pendingAddAnim[entry.questId] = nil
             end
-            bY = bY + row:GetHeight() + QUEST_GAP
+            bY = bY + rowH + QUEST_GAP
             seen[entry.questId] = true
         end
 
         self.body:SetHeight(bY == 0 and 1 or (bY - QUEST_GAP))
+
+        if overflow > 0 then
+            self._overflowText:SetText("… and " .. overflow .. " more")
+            self._overflowText:Show()
+        else
+            self._overflowText:Hide()
+        end
+
         self:_ApplyCollapsed()
         return seen
     end;
@@ -922,10 +960,13 @@ class "QuestTrackerCategory" : extends "Frame" {
     _ApplyCollapsed = function(self)
         if self._collapsed then
             self.body:Hide()
+            self._overflowText:Hide()
             self:SetHeight(SECONDARY_H)
         else
             self.body:Show()
-            self:SetHeight(SECONDARY_H + HEADER_QUEST_PAD + math.max(self.body:GetHeight() or 0, 0))
+            local bodyH  = math.max(self.body:GetHeight() or 0, 0)
+            local overH  = self._overflowText:IsShown() and 14 or 0
+            self:SetHeight(SECONDARY_H + HEADER_QUEST_PAD + bodyH + overH)
         end
     end;
 
@@ -1138,8 +1179,26 @@ class "QuestTracker" : extends {"Frame", "Editable"} {
         elseif MUI_ModuleActionBars.bars.MULTIBAR3:IsShown() then
             self:LeftOf(MUI_ModuleActionBars.bars.MULTIBAR3, 8, 0)
         else
-            self:AlignParentRight(-14, 0)
+            self:AlignParentRight(8, 0)
         end
+    end;
+
+    -- Returns the maximum pixel height allowed for the quest body, computed
+    -- from the gap between the tracker's top edge and the main action bar.
+    -- Falls back to 500 before the first layout pass settles frame positions.
+    _MaxBodyHeight = function(self)
+        local trackerTop = self:GetTop()
+        local bar        = MUI_ModuleActionBars.bars.MAIN1
+        local barTop     = bar and bar:GetTop()
+        if not trackerTop or trackerTop == 0 or not barTop then
+            return 500
+        end
+        -- Chrome overhead: primary header + category header (accounting for
+        -- the body/header overlap expressed by the negative HEADER_QUEST_PAD),
+        -- outer padding, the overflow-text row (14 px), and a 10 px margin.
+        local reserved = PRIMARY_H + CATEGORY_GAP + SECONDARY_H + HEADER_QUEST_PAD
+                       + OUTER_PAD + 14 + 10
+        return math.max(trackerTop - barTop - reserved, 80)
     end;
 
     Rebuild = function(self)
@@ -1149,14 +1208,80 @@ class "QuestTracker" : extends {"Frame", "Editable"} {
                 tracked[#tracked + 1] = entry
             end
         end
-        -- Quests with a track-order (assigned the moment they became
-        -- tracked — either via QUEST_ACCEPTED isNew or via SetTracked
-        -- toggling untracked → tracked) sort first, newest at the top.
-        -- Pre-existing tracked quests from /reload have no track-order
-        -- and fall to the bottom in logIndex order, preserving the
-        -- prior behaviour.
+
+        -- Player world position, evaluated once per rebuild.
+        -- Used to compute per-quest proximity so nearby quests sort first.
+        local playerX, playerY, playerCont
+        local uiMapId = C_Map.GetBestMapForUnit("player")
+        if uiMapId then
+            local pos = C_Map.GetPlayerMapPosition(uiMapId, "player")
+            if pos then
+                playerX, playerY, playerCont = MUI_MapMath:MapToWorld(uiMapId, pos.x, pos.y)
+            end
+        end
+
+        -- Returns (tier, distanceSq) for proximity-first ordering:
+        --   0  complete quest whose turn-in is on the player's continent
+        --   1  in-progress quest with objectives on the player's continent
+        --   2  complete quest, turn-in on a different continent or unknown
+        --   3  in-progress quest, objectives elsewhere / no geo data
+        local function _proximityTier(entry)
+            local cluster = MUI_QuestHelper:GetQuestClusters(entry.questId)
+            if not cluster then return 3, 0 end
+
+            if entry.isComplete then
+                local fPoints = cluster:GetFinisherPoints()
+                local fCont   = cluster:GetFinisherContinent()
+                if playerCont and fCont == playerCont and #fPoints > 0 then
+                    local minDist = math.huge
+                    if playerX then
+                        for _, pt in ipairs(fPoints) do
+                            local dx = pt[1] - playerX
+                            local dy = pt[2] - playerY
+                            local d  = dx * dx + dy * dy
+                            if d < minDist then minDist = d end
+                        end
+                    end
+                    return 0, minDist == math.huge and 0 or minDist
+                end
+                return 2, 0
+            end
+
+            -- In-progress: find nearest unfinished objective cluster.
+            local cont = cluster:GetContinent()
+            if playerCont and cont == playerCont then
+                local minDist = math.huge
+                if playerX then
+                    for _, c in ipairs(cluster:GetClusters()) do
+                        if c._continent == playerCont then
+                            local dx = c.centroid[1] - playerX
+                            local dy = c.centroid[2] - playerY
+                            local d  = dx * dx + dy * dy
+                            if d < minDist then minDist = d end
+                        end
+                    end
+                    for _, pt in ipairs(cluster:GetPoints()) do
+                        local dx = pt[1] - playerX
+                        local dy = pt[2] - playerY
+                        local d  = dx * dx + dy * dy
+                        if d < minDist then minDist = d end
+                    end
+                end
+                return 1, minDist == math.huge and 0 or minDist
+            end
+
+            return 3, 0
+        end
+
+        -- Primary: proximity tier then distance. Secondary: track-order
+        -- (newest first) then logIndex, preserving the prior behaviour
+        -- within each tier.
         local order = self._trackOrder
         table.sort(tracked, function(a, b)
+            local ta, da = _proximityTier(a)
+            local tb, db = _proximityTier(b)
+            if ta ~= tb then return ta < tb end
+            if da ~= db then return da < db end
             local oa, ob = order[a.questId], order[b.questId]
             if oa and ob then return oa > ob end
             if oa then return true end
@@ -1164,7 +1289,8 @@ class "QuestTracker" : extends {"Frame", "Editable"} {
             return (a.logIndex or 0) < (b.logIndex or 0)
         end)
 
-        self.questsCategory:SetQuests(tracked, self._pendingAddAnim)
+        local maxBodyH = self:_MaxBodyHeight()
+        self.questsCategory:SetQuests(tracked, self._pendingAddAnim, maxBodyH)
         self:_Restack()
     end;
 

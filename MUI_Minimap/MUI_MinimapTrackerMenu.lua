@@ -27,12 +27,9 @@ local TRACKING_SPELL_IDS = {
 
 -- Override the default spell icon with an OBJECTS_ATLAS region for specific
 -- tracking spells whose native icons look out of place next to the hardcoded
--- filter icons (Auctioneer, Banker, …). Fill in x/y/w/h once you know them.
-local SPELL_ICON_OVERRIDES = {
-    [2383] = { x = 963, y = 520, w = 32, h = 32 }, -- Find Herbs    — TODO: real atlas coords
-    [2580] = { x = 520, y = 552, w = 32, h = 32 }, -- Find Minerals — TODO: real atlas coords
-    [2481] = { x = 656, y = 756, w = 32, h = 32 }, -- Find Treasure — TODO: real atlas coords
-}
+-- filter icons (Auctioneer, Banker, …). Add entries here once the atlas
+-- coords for herb/mineral/treasure icons are confirmed.
+local SPELL_ICON_OVERRIDES = {}
 
 class "MinimapTrackerMenu" {
     __init = function(self, parent, name, toggleAnchor)

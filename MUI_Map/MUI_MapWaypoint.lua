@@ -122,14 +122,10 @@ class "MapWaypointManager" : extends "Frame" {
     ClearWaypoint = function(self)
         if not self._waypoint then return end
         self._waypoint = nil
-        if self._mapPin then
-            self._mapPin:Destroy()
-            self._mapPin = nil
-        end
-        if self._minimapPin then
-            self._minimapPin:Destroy()
-            self._minimapPin = nil
-        end
+        -- Destroy hides and unregisters from tracker/ticker; keep the Lua
+        -- references so _Refresh* can reuse the frames on the next placement.
+        if self._mapPin     then self._mapPin:Destroy()     end
+        if self._minimapPin then self._minimapPin:Destroy() end
         if MUI_FocusManager:IsFocused("waypoint", FOCUS_KEY) then
             MUI_FocusManager:SetFocus(nil)
         end
@@ -236,21 +232,32 @@ class "MapWaypointManager" : extends "Frame" {
     end;
 
     _RefreshMapPin = function(self)
-        if self._mapPin then
-            self._mapPin:Destroy()
-            self._mapPin = nil
+        if not self._waypoint then
+            if self._mapPin then self._mapPin:Destroy() end
+            return
         end
-        if not self._waypoint then return end
         local uiMapId = WorldMapFrame and WorldMapFrame:GetMapID()
-        if not uiMapId then return end
+        if not uiMapId then
+            if self._mapPin then self._mapPin:Destroy() end
+            return
+        end
         local nx, ny = MUI_MapMath:WorldToMap(
             uiMapId,
             self._waypoint.wx, self._waypoint.wy,
             self._waypoint.continent)
-        if not nx or not ny then return end
-        if nx < 0 or nx > 1 or ny < 0 or ny > 1 then return end
+        if not nx or not ny or nx < 0 or nx > 1 or ny < 0 or ny > 1 then
+            if self._mapPin then self._mapPin:Destroy() end
+            return
+        end
 
-        local pin = MapPin(PIN_FRAME_NAME, 15)
+        local pin
+        if self._mapPin then
+            pin = self._mapPin
+            pin:Reset(15)
+        else
+            pin = MapPin(PIN_FRAME_NAME, 15)
+            self._mapPin = pin
+        end
         pin._focusKind = "waypoint"
         pin._focusKey  = FOCUS_KEY
         local focused = MUI_FocusManager:IsFocused("waypoint", FOCUS_KEY)
@@ -290,26 +297,30 @@ class "MapWaypointManager" : extends "Frame" {
             tooltip:AddLine("<Shift-click to share coordinates in chat>", 0, 1, 0, true)
             tooltip:AddLine("<Ctrl-Left Click to remove pin>", 0, 1, 0, true)
         end)
-        self._mapPin = pin
     end;
 
     _RefreshMinimapPin = function(self)
-        if self._minimapPin then
-            self._minimapPin:Destroy()
-            self._minimapPin = nil
+        if not self._waypoint then
+            if self._minimapPin then self._minimapPin:Destroy() end
+            return
         end
-        if not self._waypoint then return end
-        local pin = MinimapPin("MUI_MinimapWaypointPin", 14)
+
+        local pin
+        if self._minimapPin then
+            pin = self._minimapPin
+            pin:Reset(14)
+        else
+            pin = MinimapPin("MUI_MinimapWaypointPin", 14)
+            self._minimapPin = pin
+        end
 
         local focused = MUI_FocusManager:IsFocused("waypoint", FOCUS_KEY)
-
         pin:SetIconType(focused and "WaypointFocused" or "Waypoint")
         pin:SetWorldPosition(
             self._waypoint.uiMapId,
             self._waypoint.normX,
             self._waypoint.normY)
         pin:Show()
-        self._minimapPin = pin
     end;
 
     -- Sync icon variants when focus state flips. World-map pin swaps
