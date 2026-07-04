@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$0")/.." && pwd)"
+DEST="/Applications/World of Warcraft/_classic_era_/Interface/AddOns/ModernUI"
+
+if [[ ! -d "$DEST" ]]; then
+  echo "Error: destination not found: $DEST"
+  exit 1
+fi
+
+rsync -av --delete \
+  --exclude='.git' \
+  --exclude='.gitignore' \
+  --exclude='README.md' \
+  --exclude='ATTRIBUTION.md' \
+  --exclude='LICENSE' \
+  --exclude='screenshots/' \
+  --exclude='tools/' \
+  "$SRC/" "$DEST/"
+
+echo "Deployed to $DEST"
