@@ -81,6 +81,25 @@
 --
 --   debuff      Override the debuff name when it differs from the spell name.
 
+-- ─── User options ─────────────────────────────────────────────────────────────
+-- Change these values to adjust how icons behave outside of active combat.
+
+-- Fade icons to a low opacity when the player is not in combat.
+local FADE_OUT_OF_COMBAT  = true
+
+-- Opacity of icons when out of combat (0.0 = invisible, 1.0 = fully opaque).
+-- Only applies when FADE_OUT_OF_COMBAT is true.
+local OUT_OF_COMBAT_ALPHA = 0.12
+
+-- Hide icons completely when the player is resting (inside an inn or major city).
+-- Takes priority over FADE_OUT_OF_COMBAT.
+local HIDE_WHEN_RESTING   = true
+
+-- Duration of the fade-in / fade-out transition in seconds.
+local FADE_DURATION       = 0.5
+
+-- ──────────────────────────────────────────────────────────────────────────────
+
 local ICON_SIZE        = 30    -- cd and maint row icon size in pixels
 local PROC_ICON_SIZE   = 46    -- proc row icons are larger so they stand out
 local ICON_GAP         = 3     -- gap between icons in the same row (pixels)
@@ -669,6 +688,9 @@ object "ModuleClassTimer" : extends "Module" {
         self:_LayoutFixed(self._cdContainer,    self._cdIcons)
         self:_LayoutFixed(self._maintContainer, self._maintIcons)
         self:_RefreshAll()
+        -- Snap to correct opacity without animation; smooth fades are reserved
+        -- for PLAYER_REGEN events so zone transitions don't look jittery.
+        self:_ApplyCombatState(false)
     end;
 
     -- Fixed-layout rows: evenly space icons left-to-right inside the container.
@@ -697,6 +719,40 @@ object "ModuleClassTimer" : extends "Module" {
         for i, icon in ipairs(shown) do
             icon:ClearAllPoints()
             icon:SetPoint("LEFT", self._procContainer, "LEFT", (i - 1) * (PROC_ICON_SIZE + ICON_GAP), 0)
+        end
+    end;
+
+    -- _ApplyCombatState evaluates the current combat and resting conditions and
+    -- sets or animates all container frames to the appropriate opacity. Call with
+    -- animate = false for instant snap (initial setup, zone transitions) and
+    -- animate = true for the smooth fade on combat enter/leave and resting change.
+    _ApplyCombatState = function(self, animate)
+        if not self._procContainer then return end  -- called before OnEnable
+
+        local inCombat = UnitAffectingCombat("player")
+        local resting  = IsResting()
+
+        local target
+        if HIDE_WHEN_RESTING and resting then
+            target = 0
+        elseif FADE_OUT_OF_COMBAT and not inCombat then
+            target = OUT_OF_COMBAT_ALPHA
+        else
+            target = 1
+        end
+
+        local containers = { self._procContainer, self._maintContainer, self._cdContainer }
+        for _, c in ipairs(containers) do
+            if animate then
+                local from = c:GetAlpha()
+                if target >= from then
+                    c:FadeIn(FADE_DURATION, from, target)
+                else
+                    c:FadeOut(FADE_DURATION, from, target)
+                end
+            else
+                c:SetAlpha(target)
+            end
         end
     end;
 
@@ -743,9 +799,26 @@ object "ModuleClassTimer" : extends "Module" {
 
         -- Zone/login: rebuild after every loading screen. Blizzard resets spell
         -- state on zone transitions so this also handles any edge cases where the
-        -- icon list drifted out of sync.
+        -- icon list drifted out of sync. _Rebuild calls _ApplyCombatState internally.
         events:RegisterEventHandler("PLAYER_ENTERING_WORLD", function()
             self:_Rebuild()
+        end)
+
+        -- Combat state: fade in on engage, fade out on disengage.
+        -- PLAYER_REGEN_DISABLED fires when the player loses health/mana regeneration
+        -- (i.e. enters combat). PLAYER_REGEN_ENABLED fires when regeneration resumes.
+        events:RegisterEventHandler("PLAYER_REGEN_DISABLED", function()
+            self:_ApplyCombatState(true)
+        end)
+
+        events:RegisterEventHandler("PLAYER_REGEN_ENABLED", function()
+            self:_ApplyCombatState(true)
+        end)
+
+        -- Resting state: fires when the player enters or leaves an inn / major city.
+        -- IsResting() reflects the new state at the time the event fires.
+        events:RegisterEventHandler("PLAYER_UPDATE_RESTING", function()
+            self:_ApplyCombatState(true)
         end)
 
         -- /classtimer           — toggle debug mode
@@ -772,7 +845,14 @@ object "ModuleClassTimer" : extends "Module" {
     -- Debug mode: force all icons visible regardless of game state so the layout
     -- can be inspected in-game without needing the right combat conditions. CDs
     -- reflect real state; proc icons skip the shimmer animation to keep things clean.
+    -- Container alpha is forced to 1 so the icons are fully visible even when the
+    -- out-of-combat fade or resting hide would normally suppress them.
     _ForceShowAll = function(self)
+        -- Override opacity so icons are always fully visible in debug mode.
+        self._procContainer:SetAlpha(1)
+        self._maintContainer:SetAlpha(1)
+        self._cdContainer:SetAlpha(1)
+
         local function showDebug(icon)
             icon:Show()
             local cs, cd, ce = GetSpellCooldown(icon._tracker.spell)
@@ -805,6 +885,9 @@ object "ModuleClassTimer" : extends "Module" {
             MUI.Print("|cffffd200ClassTimer:|r debug ON — all icons forced visible.")
         else
             self:_RefreshAll()
+            -- Restore the correct opacity for the current combat/resting state
+            -- now that debug is no longer overriding it.
+            self:_ApplyCombatState(false)
             MUI.Print("|cffffd200ClassTimer:|r debug OFF.")
         end
     end;
