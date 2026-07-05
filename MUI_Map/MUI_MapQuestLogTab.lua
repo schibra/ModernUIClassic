@@ -17,6 +17,14 @@ local CATEGORIES_GAP = 4
 -- Enum.UIMapType.Zone == 3, .Continent == 2 (Cosmic=0, World=1).
 local ZONE_MAP_TYPE = 3
 
+-- Classic Era hard-caps a character's quest log at 20 active quests, but
+-- nothing in the default UI (or here, until now) surfaces that limit.
+local MAX_ACTIVE_QUESTS = 20
+
+-- Same yellow "!" used inline in the empty-state message below — the icon
+-- players already associate with quests, prefixed onto the counter text.
+local QUEST_COUNTER_ICON = "|TInterface\\GossipFrame\\AvailableQuestIcon:12:12|t"
+
 
 class "MapQuestLogTab" : extends "Frame" {
     __init = function(self, parent)
@@ -239,12 +247,14 @@ class "MapQuestLogTab" : extends "Frame" {
         self._settingsBtn = btn
     end;
 
-    -- Search box, sits to the left of the gear icon.
+    -- Search box, sits to the left of the gear icon. The quest counter sits
+    -- further left still, so the search box gives up some of its width to
+    -- make room for it.
     _BuildSearchBar = function(self)
         self._searchBox = SearchBox(self, "MUI_QuestLogSeachBox")
         self._searchBox:SetHint("Search in the quest list")
         self._searchBox:SetScale(0.6)
-        self._searchBox:SetWidth(197 / 0.6)
+        self._searchBox:SetWidth(142 / 0.6)
         self._searchBox:LeftOf(self._settingsBtn, 4, -1)
 
         -- SearchBox already sets OnTextChanged for its own clear-button
@@ -255,6 +265,16 @@ class "MapQuestLogTab" : extends "Frame" {
             self._filter = text or ""
             self:Refresh()
         end
+
+        -- Active quest count vs. the Classic Era log cap. Updated in
+        -- Refresh(); colored red once the log is actually full so it
+        -- reads as a warning, not just trivia.
+        self._questCounter = FontString(self, nil, "OVERLAY")
+        self._questCounter:SetFont(MUI.FONT, 11)
+        self._questCounter:SetShadowOffset(1, -1)
+        self._questCounter:SetJustifyH("RIGHT")
+        self._questCounter:ClearAllPoints()
+        self._questCounter:LeftOf(self._searchBox, 4, -1)
     end;
 
     -- Subscribe to log + tracker events that should rebuild or
@@ -309,6 +329,7 @@ class "MapQuestLogTab" : extends "Frame" {
         local zone = "Misc"
         local filter      = (self._filter or ""):lower()
         local hasAnyQuest = false   -- any quest in the log, ignoring the filter
+        local questCount  = 0       -- total active quests, ignoring the filter
         for i = 1, GetNumQuestLogEntries() do
             local title, level, _, isHeader, _, isComplete, _, questID
                 = GetQuestLogTitle(i)
@@ -316,6 +337,7 @@ class "MapQuestLogTab" : extends "Frame" {
                 zone = title or "Misc"
             elseif questID and questID > 0 then
                 hasAnyQuest = true
+                questCount  = questCount + 1
                 local matches = filter == ""
                     or string.find((title or ""):lower(), filter, 1, true) ~= nil
                 if matches then
@@ -393,6 +415,14 @@ class "MapQuestLogTab" : extends "Frame" {
         self._empty:SetVisible(not hasAnyQuest)
         self._notFound:SetVisible(filtered)
         self._bg:SetTextureRegion(LOG_BG_TEX, 2048, 1024, hasAnyQuest and 616 or 0, 0, 616, 1022)
+
+        self._questCounter:SetText(QUEST_COUNTER_ICON .. " " .. questCount .. " / " .. MAX_ACTIVE_QUESTS)
+        if questCount >= MAX_ACTIVE_QUESTS then
+            self._questCounter:SetTextColor(1, 0.2, 0.2, 1)
+        else
+            self._questCounter:SetTextColor(0.82, 0.82, 0.82, 1)
+        end
+
         self:_ApplyMapAwareCollapse()
         self:_RecalcHeight()
     end;
