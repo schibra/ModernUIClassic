@@ -37,6 +37,12 @@
 --                 with `track = "selfBuff"` use FindBuff instead (right for
 --                 talent procs that manifest as visible buff auras). Pass a
 --                 condition preset or a raw function for anything else.
+--                 This row isn't DPS-only: `track = "selfBuff"` also works for
+--                 short, critical tank/healer cooldowns (see Last Stand /
+--                 Shield Wall in Warrior.lua) — a big glowing icon while the
+--                 buff is active, gone the instant it ends. A
+--                 `condition = {"playerHealth", X}` entry is the other
+--                 pattern, for "use your emergency cooldown now" alerts.
 --
 -- ADDING A CLASS PROFILE
 -- ──────────────────────
