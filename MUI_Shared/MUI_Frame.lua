@@ -131,6 +131,10 @@ class "Frame" : extends {"Widget", "ScriptObject"} {
         self._native:EnableMouseWheel(enable)
     end;
 
+    SetHitRectInsets = function(self, left, right, top, bottom)
+        self._native:SetHitRectInsets(left, right, top, bottom)
+    end;
+
     SetPropagateMouseClicks = function(self, propagate)
         self._native:SetPropagateMouseClicks(propagate)
     end;

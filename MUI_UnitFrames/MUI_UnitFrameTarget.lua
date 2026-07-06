@@ -23,19 +23,14 @@ class "UnitFrameTarget" {
         Texture(TargetFrameNameBackground):SetTexture(nil)
 
         self.frame = UnitFrameEditable(TargetFrame, "Target")
-        self.frame:ClearAllPoints()
-        self.frame:SetSize(171, 58)
-        self.frame:SetPoint("BOTTOMLEFT", MUI_ModuleActionBars.bars.MAIN1, "TOPRIGHT", 38, 162)
         self.frame:EditModeSetDefaultPosition(function(f)
             f:ClearAllPoints()
             f:SetPoint("BOTTOMLEFT", MUI_ModuleActionBars.bars.MAIN1, "TOPRIGHT", 38, 162)
         end)
 
         self._portrait = Texture(TargetFramePortrait)
-        self._portrait:SetSize(55, 54)
-        self._portrait:ClearAllPoints()
-        self._portrait:AlignTop(self.frame, 1)
-        self._portrait:AlignRight(self.frame, 3)
+
+        self:Reanchor()
 
         self._frameTex = Texture(self.frame)
         self._frameTex:SetTextureRegion(TEX .. "target-frame", 512, 128, 66, 0, 380, 128)
@@ -124,6 +119,25 @@ class "UnitFrameTarget" {
             self:OnTargetChanged()
         end)
 
+    end;
+
+    -- Re-applies TargetFrame position/size and portrait anchor. Called once
+    -- at init and again on PLAYER_ENTERING_WORLD because Blizzard's native UI
+    -- resets TargetFrame (and its portrait) to their default state after
+    -- every loading screen.
+    Reanchor = function(self)
+        self.frame:ClearAllPoints()
+        self.frame:SetSize(171, 58)
+        -- Blizzard's default hit rect insets are sized for the stock art;
+        -- they leave a misshapen click target once we reskin/resize the
+        -- frame, so reset to the full (new) bounding box.
+        self.frame:SetHitRectInsets(0, 0, 0, 0)
+        self.frame:SetPoint("BOTTOMLEFT", MUI_ModuleActionBars.bars.MAIN1, "TOPRIGHT", 38, 162)
+
+        self._portrait:SetSize(55, 54)
+        self._portrait:ClearAllPoints()
+        self._portrait:AlignTop(self.frame, 1)
+        self._portrait:AlignRight(self.frame, 3)
     end;
 
     _SetupNameAndLevel = function(self)

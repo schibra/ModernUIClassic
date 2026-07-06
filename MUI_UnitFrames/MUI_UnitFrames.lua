@@ -166,9 +166,13 @@ object "UnitFrames" : extends "Module" {
         self.eventFrame:RegisterEventHandler("UNIT_MAXPOWER",   unitBars)
 
         self.eventFrame:RegisterEventHandler("PLAYER_ENTERING_WORLD", function()
-            -- Blizzard defers its PlayerFrame reset by one tick, so defer Reanchor
-            -- to the next tick to ensure it runs after Blizzard's reset completes.
-            C_Timer.After(0, function() self.player:Reanchor() end)
+            -- Blizzard defers its PlayerFrame/TargetFrame reset by one tick, so
+            -- defer Reanchor to the next tick to ensure it runs after Blizzard's
+            -- reset completes.
+            C_Timer.After(0, function()
+                self.player:Reanchor()
+                self.target:Reanchor()
+            end)
             self.player:UpdateBars()
             self.combo:Update()
             if UnitExists("target") then self.target:OnTargetChanged() end
