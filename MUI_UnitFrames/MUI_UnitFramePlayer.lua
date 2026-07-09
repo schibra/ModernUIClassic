@@ -35,8 +35,6 @@ class "UnitFramePlayer" {
         Frame(PlayerFrameManaBarTextLeft):HideFrame()
         Frame(PlayerFrameManaBarTextRight):HideFrame()
         Frame(PlayerFrameBackground):HideFrame()
-        Texture(PlayerFrameTexture):Hide()
-        Texture(PlayerStatusTexture):SetTexture("")
 
         self.frame = UnitFrameEditable(PlayerFrame, "Player")
         self.frame:EditModeSetDefaultPosition(function(f)
@@ -127,11 +125,18 @@ class "UnitFramePlayer" {
     Reanchor = function(self)
         self.frame:ClearAllPoints()
         self.frame:SetSize(171, 58)
+        self.frame:SetHitRectInsets(0, 0, 0, 0)
         self.frame:SetPoint("BOTTOMRIGHT", MUI_ModuleActionBars.bars.MAIN1, "TOPLEFT", -38, 162)
         self._portrait:SetSize(56, 54)
         self._portrait:ClearAllPoints()
         self._portrait:AlignTop(self.frame, 1)
         self._portrait:AlignLeft(self.frame, 1)
+
+        -- PlayerFrame_ToPlayerArt (Blizzard) re-shows this native frame texture
+        -- on every PLAYER_ENTERING_WORLD, which then renders around our portrait
+        -- at Blizzard's stock anchors instead of our reskin's.
+        Texture(PlayerFrameTexture):Hide()
+        Texture(PlayerStatusTexture):SetTexture("")
     end;
 
     _BuildOverlays = function(self)
