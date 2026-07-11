@@ -20,6 +20,15 @@ local COMBINED_COLUMNS = 10                   -- grid width of the joined window
 local COMBINED_TOP     = 52                   -- reserve for title + search box
 local COMBINED_BOTTOM  = 28                   -- reserve for the money row
 
+-- Bag role/ignore indicator icons (see CreateRoleBadge/ApplyRoleBadge).
+local ROLE_ICONS = {
+    gear     = "Interface\\Icons\\INV_Sword_04",             -- generic weapon
+    reagents = "Interface\\Icons\\Trade_Herbalism",          -- generic herb
+    ignored  = "Interface\\RaidFrame\\ReadyCheck-NotReady",  -- red X
+}
+local ROLE_BADGE_SIZE      = 18   -- border ring, same atlas piece as the keyring badge
+local ROLE_BADGE_ICON_SIZE = 13
+
 -- Editable container for the bottom bag bar. The bag buttons are parented to it
 -- (so the whole bar drags + scales as one unit); it carries no visuals itself.
 class "BagBar" : extends {"Frame", "Editable"} {
@@ -59,7 +68,120 @@ object "ModuleBags" : extends "Module" {
         self:UpdateBagSlotIcons()
         self:CreateFreeSlotCounter()
         self:SkinContainerFrames()
+        self:UpdateBagRoleBadges()
 
+    end;
+
+    -- ===================================================================
+    -- Bag roles ("Gear" / "Reagents") + "Ignored", read by MUI_BagSorter.
+    -- Assigned per bag (0 = backpack, 1-4 = bag slots) via the bag window's
+    -- portrait menu (see ShowBagMenu); shown as a small badge on both that
+    -- portrait and the corresponding bottom-bar icon.
+    -- ===================================================================
+
+    -- Same circular badge-border atlas piece SkinKeyRing uses for the
+    -- keyring icon (bagslots2x, the round variant — the regular bag-slot
+    -- border a few columns over is square). Sits pulled slightly outside
+    -- the parent's own top-left corner so it overlaps that border, like a
+    -- badge, rather than sitting fully inset inside the icon.
+    CreateRoleBadge = function(self, parent, top, left)
+        local bagAtlas = TEX .. "bagslots2x"
+
+        local border = Texture(parent, nil, "OVERLAY")
+        border:SetTexture(bagAtlas)
+        border:SetTexCoord(0.699219, 0.818359, 0.5, 0.976562)
+        border:SetSize(ROLE_BADGE_SIZE, ROLE_BADGE_SIZE)
+        border:ClearAllPoints()
+        border:AlignParentTopLeft(top or -4, left or -4)
+        border:Hide()
+
+        local icon = Texture(parent, nil, "OVERLAY")
+        icon:SetDrawLayer("OVERLAY", 1)
+        icon:SetMask("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+        icon:SetSize(ROLE_BADGE_ICON_SIZE, ROLE_BADGE_ICON_SIZE)
+        icon:ClearAllPoints()
+        icon:CenterAt(border)
+        icon:Hide()
+
+        return { border = border, icon = icon }
+    end;
+
+    ApplyRoleBadge = function(self, badge, role)
+        if not badge then return end
+        local path = ROLE_ICONS[role]
+        if path then
+            badge.icon:SetTexture(path)
+            badge.border:Show()
+            badge.icon:Show()
+        else
+            badge.border:Hide()
+            badge.icon:Hide()
+        end
+    end;
+
+    -- Combined mode has no per-bag identity to assign a role to (everything's
+    -- one merged window), so badges/menu both treat it as "nothing assigned."
+    UpdateBagRoleBadges = function(self)
+        local roles = (not self._combined) and MUI_DB.settings.bags.roles or {}
+        for bagID, badge in pairs(self._roleBadges or {}) do
+            self:ApplyRoleBadge(badge, roles[bagID])
+        end
+        -- A ContainerFrame that hasn't been opened yet this session doesn't
+        -- have a real bag ID assigned (GetID() reads as a bogus default), so
+        -- only refresh the portrait badges of currently-shown bag windows;
+        -- OnContainerUpdate applies the correct one the moment each bag opens.
+        for _, entry in ipairs(self._bags or {}) do
+            if entry.roleBadge and entry.frame:IsShown() then
+                self:ApplyRoleBadge(entry.roleBadge, roles[entry.frame:GetID()])
+            end
+        end
+    end;
+
+    -- Single menu off the bag window's portrait icon: Combine/Separate plus
+    -- (outside combined mode, and not for the keyring) the Gear/Reagents/
+    -- Ignore role assignment.
+    ShowBagMenu = function(self, entry, anchorBtn)
+        local bagID = entry.frame:GetID()
+
+        if not self._bagMenu then
+            self._bagMenu = DropdownMenu(Frame(UIParent), "MUI_BagMenu")
+            self._bagMenu:SetMenuWidth(150)
+            self._bagMenu:SetAnchor(function(popup, a) if a then
+                popup:Below(a, -14)
+                popup:AlignLeft(a, -14)
+            end end)
+        end
+        local menu  = self._bagMenu
+        local roles = MUI_DB.settings.bags.roles
+
+        local buildItems
+        local function setRole(role)
+            roles[bagID] = (roles[bagID] == role) and nil or role
+            self:UpdateBagRoleBadges()
+            menu:SetItems(buildItems())
+        end
+        buildItems = function()
+            local items = {
+                { type = "text", label = self._combined and "Separate Bags" or "Combine Bags",
+                  OnClick = function() self:SetCombined(not self._combined) end },
+            }
+            if not self._combined and bagID ~= KEYRING_CONTAINER then
+                local current = roles[bagID]
+                table.insert(items, { type = "separator" })
+                table.insert(items, { type = "checkbox", label = "Gear", checked = current == "gear",
+                    OnChanged = function() setRole("gear") end })
+                table.insert(items, { type = "checkbox", label = "Reagents", checked = current == "reagents",
+                    OnChanged = function() setRole("reagents") end })
+                table.insert(items, { type = "separator" })
+                table.insert(items, { type = "checkbox", label = "Ignore This Bag", checked = current == "ignored",
+                    OnChanged = function() setRole("ignored") end })
+            end
+            return items
+        end
+
+        menu:SetItems(buildItems())
+        menu:SetToggleAnchor(anchorBtn)
+        menu:Toggle()
     end;
 
     SkinMainBag = function(self)
@@ -95,6 +217,8 @@ object "ModuleBags" : extends "Module" {
         local border = Texture(self.backpack, nil, "OVERLAY")
         border:SetTexture(TEX .. "bagslotCutout")
         border:FillParent()
+
+        self._roleBadges = { [0] = self:CreateRoleBadge(self.backpack) }
     end;
 
     SkinSmallBags = function(self)
@@ -177,6 +301,8 @@ object "ModuleBags" : extends "Module" {
                 countText:Below(iconTex, 1, 2)
                 countText:SetJustifyH("CENTER")
             end
+
+            self._roleBadges[i + 1] = self:CreateRoleBadge(slot)
         end
     end;
 
@@ -396,7 +522,7 @@ object "ModuleBags" : extends "Module" {
         self._btnSort:AlignParentRight(-28, -1)
         self._btnSort:SetTooltip("ANCHOR_LEFT", function(tooltip)
             tooltip:AddLine("Sort items in bags", 1, 1, 1, true, 13)
-            tooltip:AddLine("Automatic item sorting is a setting that automatically places items. You can choose a specific type of item for each bag by clicking the icon in the upper-left corner of the bag.", 1, 0.82, 0, true)
+            tooltip:AddLine("Automatic item sorting places items by quality, sending quest items to your last bag and junk to your first. Click a bag's icon in its upper-left corner to assign it a role (Gear, Reagents) or mark it Ignored so sorting leaves it alone (Separate Bags mode only).", 1, 0.82, 0, true)
         end)
         self._btnSort.OnClick = function()
             MUI_BagSorter:SortBags()
@@ -480,17 +606,29 @@ object "ModuleBags" : extends "Module" {
         entry.nativeName:SetAlpha(0)
         Texture(getglobal(name .. "Portrait")):SetAlpha(0)
 
-        -- Left-clicking the portrait opens the join/separate menu (retail-style).
+        -- Clicking the portrait opens the bag menu: Combine/Separate Bags,
+        -- plus (outside combined mode) the Gear/Reagents/Ignore role menu.
         entry.portraitBtn = Button(getglobal(name .. "PortraitButton"))
         entry.portraitBtn:RegisterForClicks("LeftButtonUp")
         entry.portraitBtn:SetScript("OnClick", function()
-            self:ShowPortraitMenu(entry.portraitBtn)
+            self:ShowBagMenu(entry, entry.portraitBtn)
         end)
+
+        -- Portrait button is bigger/scaled differently than the small bar
+        -- icons, so it needs a larger pull-out offset to sit at its corner.
+        entry.roleBadge = self:CreateRoleBadge(entry.portraitBtn, -13, -9)
 
         entry.panel = PanelPortrait(frame, nil, "", 0.9, true)
         entry.panel:FillParentPadding(0, 0, 4, 0)
         entry.panel:SetFrameLevel(0)
         entry.panel:GetBackgroundTexture():SetColorTexture(0.1, 0.1, 0.1, 0.75)
+
+        -- PanelPortrait puts its own border/portrait-image frame in front of
+        -- its content (MUI_Panel.lua's PutInfront(self._content, 20)), which
+        -- sits above portraitBtn's frame level — without this, that border
+        -- visually covers portraitBtn's role badge even though the button
+        -- underneath still receives clicks fine.
+        entry.portraitBtn:PutInfront(entry.panel, 1000)
 
         -- Close button into the top-right corner, reskinned like Options' X.
         entry.close = Button(getglobal(name .. "CloseButton"))
@@ -562,6 +700,7 @@ object "ModuleBags" : extends "Module" {
         if not entry then return end
 
         local id = entry.frame:GetID()
+        self:ApplyRoleBadge(entry.roleBadge, MUI_DB.settings.bags.roles[id])
 
         -- Drive each slot's ItemIcon from the container data. Blizzard re-shows
         -- its own icon every update, so hide it again before showing ours.
@@ -757,31 +896,11 @@ object "ModuleBags" : extends "Module" {
         if self._combined == on then return end
         self._combined = on
         MUI_DB.settings.bags.combined = on
+        self:UpdateBagRoleBadges()
         -- OpenAllBags() no-ops unless everything is closed first, so reset the
         -- whole set and reopen it under the new mode.
         CloseAllBags()
         OpenAllBags()
-    end;
-
-    ShowPortraitMenu = function(self, anchorBtn)
-        if not self._portraitMenu then
-            self._portraitMenu = DropdownMenu(Frame(UIParent), "MUI_BagPortraitMenu")
-            self._portraitMenu:SetMenuWidth(150)
-            self._portraitMenu:SetAnchor(function(popup, a) if a then 
-                popup:Below(a, -14)
-                popup:AlignLeft(a, -14)
-            end end)
-        end
-        local menu = self._portraitMenu
-        menu:SetItems({
-            {
-                type    = "text",
-                label   = self._combined and "Separate Bags" or "Combine Bags",
-                OnClick = function() self:SetCombined(not self._combined) end,
-            },
-        })
-        menu:SetToggleAnchor(anchorBtn)
-        menu:Toggle()
     end;
 
     -- Reflow every open bag's item buttons into one grid in the backpack's

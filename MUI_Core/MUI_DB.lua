@@ -61,6 +61,10 @@ local DEFAULTS = {
         },
         bags = {
             combined = false,   -- join all bags into one window (retail-style)
+            -- [bagID] = "gear" | "reagents" | "ignored". bagID: 0 = backpack,
+            -- 1-4 = bag slots (matches C_Container container IDs).
+            -- Absent = unassigned.
+            roles = {},
         },
         -- Edit-mode layouts keyed by frame name: [name] = { points = {...}, scale = N }.
         -- Written by the edit-mode "Save" button, applied on PLAYER_ENTERING_WORLD.
